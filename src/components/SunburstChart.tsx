@@ -134,7 +134,7 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({ data, o
             dataKey="value"
             onClick={onNodeClick}
             animationBegin={0}
-            animationDuration={800}
+            animationDuration={300}
           >
             {level1Data.map((entry, index) => (
               <Cell 
@@ -160,8 +160,8 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({ data, o
             fill="#82ca9d"
             dataKey="value"
             onClick={onNodeClick}
-            animationBegin={200}
-            animationDuration={800}
+            animationBegin={100}
+            animationDuration={300}
           >
             {level0Data.map((entry, index) => (
               <Cell 

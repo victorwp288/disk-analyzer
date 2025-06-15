@@ -129,7 +129,7 @@ export const BarChart: React.FC<BarChartProps> = React.memo(({ data, onNodeClick
             dataKey="size"
             onClick={onNodeClick}
             cursor="pointer"
-            animationDuration={800}
+            animationDuration={400}
             radius={[2, 2, 0, 0]}
           >
             {barData.map((entry, index) => (

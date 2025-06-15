@@ -22,8 +22,9 @@ interface TreemapChartProps {
 }
 
 const colors = [
-  '#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1',
-  '#d084d0', '#87d068', '#ffa500', '#ff6b6b', '#4ecdc4'
+  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#06b6d4', '#84cc16', '#f97316', '#ec4899', '#6366f1',
+  '#14b8a6', '#eab308', '#f43f5e', '#8b5cf6', '#22c55e'
 ];
 
 const formatBytes = (bytes: number): string => {
@@ -59,68 +60,106 @@ const transformData = (fileInfo: FileInfo): TreemapData[] => {
 const CustomizedContent = (props: any) => {
   const { root, depth, x, y, width, height, index, name, size } = props;
   
-  if (width < 30 || height < 20) return null;
+  if (width < 40 || height < 30) return null;
   
-  const color = colors[index % colors.length];
-  const textColor = '#fff';
-  const fontSize = Math.max(10, Math.min(14, width / 12, height / 4));
-  const smallFontSize = Math.max(8, Math.min(11, width / 15, height / 6));
+  const baseColor = colors[index % colors.length];
+  const isSmall = width < 120 || height < 60;
+  const fontSize = isSmall ? Math.max(10, Math.min(12, width / 10)) : Math.max(12, Math.min(16, width / 15));
+  const sizeTextSize = isSmall ? Math.max(8, Math.min(10, width / 12)) : Math.max(10, Math.min(13, width / 18));
+  
+  // Create a subtle gradient effect
+  const gradientId = `gradient-${index}`;
   
   return (
-    <g className="hover:opacity-90 transition-opacity cursor-pointer">
+    <g className="group cursor-pointer">
+      <defs>
+        <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={baseColor} stopOpacity="1" />
+          <stop offset="100%" stopColor={baseColor} stopOpacity="0.8" />
+        </linearGradient>
+        <filter id={`shadow-${index}`} x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="2" floodOpacity="0.15"/>
+        </filter>
+      </defs>
+      
+      {/* Main rectangle with gradient */}
       <rect
         x={x}
         y={y}
         width={width}
         height={height}
-        style={{
-          fill: color,
-          stroke: '#fff',
-          strokeWidth: 2,
-          filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))',
-        }}
-        className="hover:brightness-110 transition-all"
+        fill={`url(#${gradientId})`}
+        stroke="rgba(255,255,255,0.8)"
+        strokeWidth="1"
+        rx="3"
+        ry="3"
+        filter={`url(#shadow-${index})`}
+        className="group-hover:brightness-110 transition-all duration-200"
       />
-      {width > 60 && height > 40 && (
-        <>
-          {/* Background for text readability */}
-          <rect
-            x={x + 4}
-            y={y + height / 2 - fontSize}
-            width={width - 8}
-            height={fontSize * 2 + 4}
-            fill="rgba(0,0,0,0.2)"
-            rx="2"
-          />
+      
+      {/* Subtle inner border for depth */}
+      <rect
+        x={x + 1}
+        y={y + 1}
+        width={width - 2}
+        height={height - 2}
+        fill="none"
+        stroke="rgba(255,255,255,0.3)"
+        strokeWidth="1"
+        rx="2"
+        ry="2"
+      />
+      
+      {/* Text content */}
+      {width > 50 && height > 35 && (
+        <g>
+          {/* File/folder name */}
           <text
-            x={x + width / 2}
-            y={y + height / 2 - 2}
-            textAnchor="middle"
-            fill={textColor}
+            x={x + 8}
+            y={y + fontSize + 8}
+            fill="white"
             fontSize={fontSize}
             fontWeight="600"
-            style={{ 
-              textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-            }}
+            fontFamily="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+            textShadow="0 1px 2px rgba(0,0,0,0.7)"
           >
-            {name && name.length > 20 ? `${name.substring(0, 20)}...` : (name || '')}
+            {name && name.length > (isSmall ? 12 : 20) 
+              ? `${name.substring(0, isSmall ? 12 : 20)}...` 
+              : (name || '')
+            }
           </text>
-          <text
-            x={x + width / 2}
-            y={y + height / 2 + smallFontSize + 2}
-            textAnchor="middle"
-            fill={textColor}
-            fontSize={smallFontSize}
-            fontWeight="500"
-            style={{ 
-              textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
-              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace'
-            }}
-          >
-            {formatBytes(size)}
-          </text>
-        </>
+          
+          {/* Size information */}
+          {height > 50 && (
+            <text
+              x={x + 8}
+              y={y + fontSize + sizeTextSize + 16}
+              fill="rgba(255,255,255,0.9)"
+              fontSize={sizeTextSize}
+              fontWeight="500"
+              fontFamily="ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace"
+              textShadow="0 1px 2px rgba(0,0,0,0.7)"
+            >
+              {formatBytes(size)}
+            </text>
+          )}
+          
+          {/* Optional percentage or additional info for larger blocks */}
+          {width > 150 && height > 80 && (
+            <text
+              x={x + width - 8}
+              y={y + height - 8}
+              fill="rgba(255,255,255,0.7)"
+              fontSize="10"
+              fontWeight="400"
+              textAnchor="end"
+              fontFamily="ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace"
+              textShadow="0 1px 2px rgba(0,0,0,0.7)"
+            >
+              #{index + 1}
+            </text>
+          )}
+        </g>
       )}
     </g>
   );
@@ -138,15 +177,17 @@ export const TreemapChart: React.FC<TreemapChartProps> = React.memo(({ data, onN
   }
 
   return (
-    <div className="w-full h-full">
+    <div className="w-full h-full p-2">
       <ResponsiveContainer width="100%" height="100%">
         <Treemap
           data={treemapData}
           dataKey="size"
           aspectRatio={4 / 3}
-          stroke="#fff"
+          stroke="none"
           content={<CustomizedContent />}
           onClick={onNodeClick}
+          animationDuration={500}
+          isAnimationActive={true}
         />
       </ResponsiveContainer>
     </div>
