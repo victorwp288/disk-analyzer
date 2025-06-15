@@ -24,5 +24,5 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 walkdir = "2"
-human-bytes = "0.4"
+human_bytes = "0.4"
 
