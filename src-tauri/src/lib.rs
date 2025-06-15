@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
+use tauri::{AppHandle, Manager};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FileInfo {
@@ -21,6 +23,14 @@ pub struct ScanResult {
     pub error_count: usize,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ScanProgress {
+    pub current_path: String,
+    pub files_processed: usize,
+    pub total_size_so_far: u64,
+    pub estimated_total: Option<usize>,
+}
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -28,11 +38,11 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-async fn scan_directory(path: String) -> Result<ScanResult, String> {
-    scan_directory_impl(&path).await.map_err(|e| e.to_string())
+async fn scan_directory(path: String, app_handle: AppHandle) -> Result<ScanResult, String> {
+    scan_directory_impl(&path, app_handle).await.map_err(|e| e.to_string())
 }
 
-async fn scan_directory_impl(root_path: &str) -> Result<ScanResult, Box<dyn std::error::Error>> {
+async fn scan_directory_impl(root_path: &str, app_handle: AppHandle) -> Result<ScanResult, Box<dyn std::error::Error>> {
     let root_path = Path::new(root_path);
     
     if !root_path.exists() {
@@ -44,8 +54,20 @@ async fn scan_directory_impl(root_path: &str) -> Result<ScanResult, Box<dyn std:
     let mut error_count = 0usize;
     let mut directory_sizes: HashMap<String, u64> = HashMap::new();
     
-    // First pass: calculate sizes for all files
-    for entry in WalkDir::new(root_path).into_iter() {
+    // First pass: calculate sizes for all files with progress reporting
+    let walker = WalkDir::new(root_path)
+        .max_depth(4) // Limit depth to prevent going too deep
+        .into_iter();
+    let mut last_progress_update = std::time::Instant::now();
+    let scan_start_time = std::time::Instant::now();
+    const MAX_FILES: usize = 50000; // Stop after 50k files to prevent infinite scanning
+    const MAX_SCAN_TIME: std::time::Duration = std::time::Duration::from_secs(300); // 5 minute timeout
+    
+    for entry in walker {
+        // Check timeout
+        if scan_start_time.elapsed() > MAX_SCAN_TIME {
+            break;
+        }
         match entry {
             Ok(entry) => {
                 if entry.file_type().is_file() {
@@ -54,6 +76,11 @@ async fn scan_directory_impl(root_path: &str) -> Result<ScanResult, Box<dyn std:
                             let size = metadata.len();
                             total_size += size;
                             file_count += 1;
+                            
+                            // Stop if we've hit the file limit
+                            if file_count >= MAX_FILES {
+                                break;
+                            }
                             
                             // Add size to all parent directories
                             let mut current_path = entry.path();
@@ -64,6 +91,19 @@ async fn scan_directory_impl(root_path: &str) -> Result<ScanResult, Box<dyn std:
                                 let parent_str = parent.to_string_lossy().to_string();
                                 *directory_sizes.entry(parent_str).or_insert(0) += size;
                                 current_path = parent;
+                            }
+                            
+                            // Send progress update every 100ms
+                            if last_progress_update.elapsed().as_millis() > 100 {
+                                let progress = ScanProgress {
+                                    current_path: entry.path().to_string_lossy().to_string(),
+                                    files_processed: file_count,
+                                    total_size_so_far: total_size,
+                                    estimated_total: None,
+                                };
+                                
+                                let _ = app_handle.emit("scan-progress", &progress);
+                                last_progress_update = std::time::Instant::now();
                             }
                         }
                         Err(_) => error_count += 1,

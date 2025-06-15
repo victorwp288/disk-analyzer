@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { HardDrive, FolderOpen, Search, Settings, Grid3X3, PieChart } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
 import { Input } from "./components/ui/input";
+import { Progress } from "./components/ui/progress";
 import { TreemapChart } from "./components/TreemapChart";
 import { SunburstChart } from "./components/SunburstChart";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -13,14 +15,28 @@ function App() {
   const [scanResults, setScanResults] = useState<any>(null);
   const [viewMode, setViewMode] = useState<'treemap' | 'sunburst'>('treemap');
   const [searchTerm, setSearchTerm] = useState('');
+  const [scanProgress, setScanProgress] = useState<any>(null);
+  const [scanPath, setScanPath] = useState('');  
+
+  useEffect(() => {
+    // Listen for scan progress events
+    const unlisten = listen('scan-progress', (event) => {
+      setScanProgress(event.payload);
+    });
+
+    return () => {
+      unlisten.then(f => f());
+    };
+  }, []);
 
   async function startScan() {
     setScanning(true);
+    setScanProgress(null);
     try {
       // Try real scan first, fall back to demo data
       try {
-        const defaultPath = navigator.userAgent.includes('Windows') ? 'C:\\' : '/home';
-        const results = await invoke("scan_directory", { path: defaultPath });
+        const pathToScan = scanPath || (navigator.userAgent.includes('Windows') ? 'C:\\Users' : '/home');
+        const results = await invoke("scan_directory", { path: pathToScan });
         setScanResults(results);
       } catch (realError) {
         console.log("Real scan failed, using demo data:", realError);
@@ -76,6 +92,7 @@ function App() {
       console.error("All scans failed:", error);
     } finally {
       setScanning(false);
+      setScanProgress(null);
     }
   }
 
@@ -120,6 +137,19 @@ function App() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="scanPath" className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Directory to scan
+                </label>
+                <Input
+                  id="scanPath"
+                  placeholder={navigator.userAgent.includes('Windows') ? 'C:\\Users\\YourName' : '/home/yourname'}
+                  value={scanPath}
+                  onChange={(e) => setScanPath(e.target.value)}
+                  disabled={scanning}
+                />
+              </div>
+              
               <Button 
                 onClick={startScan} 
                 disabled={scanning}
@@ -185,9 +215,22 @@ function App() {
             <CardContent>
               <div className="h-96 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
                 {scanning ? (
-                  <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-slate-600 dark:text-slate-400">Scanning directories...</p>
+                  <div className="text-center space-y-4">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <div className="space-y-2">
+                      <p className="text-slate-600 dark:text-slate-400">Scanning directories...</p>
+                      {scanProgress && (
+                        <>
+                          <div className="text-xs text-slate-500 dark:text-slate-500 max-w-md mx-auto truncate">
+                            {scanProgress.current_path}
+                          </div>
+                          <div className="text-sm text-slate-600 dark:text-slate-400">
+                            {scanProgress.files_processed.toLocaleString()} files • {(scanProgress.total_size_so_far / 1024 / 1024 / 1024).toFixed(2)} GB
+                          </div>
+                          <Progress value={Math.min(scanProgress.files_processed / 1000, 100)} className="w-full max-w-md mx-auto" />
+                        </>
+                      )}
+                    </div>
                   </div>
                 ) : scanResults ? (
                   viewMode === 'treemap' ? (
