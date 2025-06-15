@@ -87,7 +87,7 @@ const CustomizedContent = (props: any) => {
             fontSize={Math.min(12, width / 8, height / 4)}
             fontWeight="bold"
           >
-            {name.length > 15 ? `${name.substring(0, 15)}...` : name}
+            {name && name.length > 15 ? `${name.substring(0, 15)}...` : (name || '')}
           </text>
           <text
             x={x + width / 2}

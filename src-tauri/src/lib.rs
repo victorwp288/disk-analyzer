@@ -1,8 +1,10 @@
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
+use rayon::prelude::*;
 use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,128 +50,122 @@ async fn scan_directory_impl(root_path: &str, app_handle: AppHandle) -> Result<S
         return Err("Path does not exist".into());
     }
 
-    let mut total_size = 0u64;
-    let mut file_count = 0usize;
-    let mut error_count = 0usize;
-    let mut directory_sizes: HashMap<String, u64> = HashMap::new();
-    
-    // First pass: calculate sizes for all files with progress reporting
-    let walker = WalkDir::new(root_path)
-        .max_depth(4) // Limit depth to prevent going too deep
-        .into_iter();
-    let mut last_progress_update = std::time::Instant::now();
+    // Use a much faster approach - scan directories in parallel
     let scan_start_time = std::time::Instant::now();
-    const MAX_FILES: usize = 50000; // Stop after 50k files to prevent infinite scanning
-    const MAX_SCAN_TIME: std::time::Duration = std::time::Duration::from_secs(300); // 5 minute timeout
-    
-    for entry in walker {
-        // Check timeout
-        if scan_start_time.elapsed() > MAX_SCAN_TIME {
-            break;
-        }
-        match entry {
-            Ok(entry) => {
-                if entry.file_type().is_file() {
-                    match entry.metadata() {
-                        Ok(metadata) => {
-                            let size = metadata.len();
-                            total_size += size;
-                            file_count += 1;
-                            
-                            // Stop if we've hit the file limit
-                            if file_count >= MAX_FILES {
-                                break;
-                            }
-                            
-                            // Add size to all parent directories
-                            let mut current_path = entry.path();
-                            while let Some(parent) = current_path.parent() {
-                                if parent == root_path {
-                                    break;
-                                }
-                                let parent_str = parent.to_string_lossy().to_string();
-                                *directory_sizes.entry(parent_str).or_insert(0) += size;
-                                current_path = parent;
-                            }
-                            
-                            // Send progress update every 100ms
-                            if last_progress_update.elapsed().as_millis() > 100 {
-                                let progress = ScanProgress {
-                                    current_path: entry.path().to_string_lossy().to_string(),
-                                    files_processed: file_count,
-                                    total_size_so_far: total_size,
-                                    estimated_total: None,
-                                };
-                                
-                                let _ = app_handle.emit("scan-progress", &progress);
-                                last_progress_update = std::time::Instant::now();
-                            }
-                        }
-                        Err(_) => error_count += 1,
-                    }
-                }
-            }
-            Err(_) => error_count += 1,
-        }
-    }
+    let total_files = Arc::new(Mutex::new(0usize));
+    let total_size = Arc::new(Mutex::new(0u64));
+    let error_count = Arc::new(Mutex::new(0usize));
+    let last_progress = Arc::new(Mutex::new(std::time::Instant::now()));
 
-    // Second pass: build the tree structure
-    let root = build_file_tree(root_path, &directory_sizes)?;
+    // Fast parallel directory scan
+    let root = scan_directory_parallel(root_path, &app_handle, &total_files, &total_size, &error_count, &last_progress)?;
+    
+    let final_file_count = *total_files.lock().unwrap();
+    let final_total_size = *total_size.lock().unwrap();
+    let final_error_count = *error_count.lock().unwrap();
 
     Ok(ScanResult {
         root,
-        total_size,
-        file_count,
-        error_count,
+        total_size: final_total_size,
+        file_count: final_file_count,
+        error_count: final_error_count,
     })
 }
 
-fn build_file_tree(path: &Path, directory_sizes: &HashMap<String, u64>) -> Result<FileInfo, Box<dyn std::error::Error>> {
-    let metadata = fs::metadata(path)?;
+fn scan_directory_parallel(
+    path: &Path,
+    app_handle: &AppHandle,
+    total_files: &Arc<Mutex<usize>>,
+    total_size: &Arc<Mutex<u64>>,
+    error_count: &Arc<Mutex<usize>>,
+    last_progress: &Arc<Mutex<std::time::Instant>>,
+) -> Result<FileInfo, Box<dyn std::error::Error>> {
+    let metadata = match fs::metadata(path) {
+        Ok(meta) => meta,
+        Err(_) => {
+            *error_count.lock().unwrap() += 1;
+            return Err("Cannot read metadata".into());
+        }
+    };
+
     let name = path.file_name()
         .unwrap_or_else(|| path.as_os_str())
         .to_string_lossy()
         .to_string();
     
     let path_str = path.to_string_lossy().to_string();
-    
-    if metadata.is_dir() {
-        let mut children = Vec::new();
-        let mut dir_size = 0u64;
+
+    if metadata.is_file() {
+        let size = metadata.len();
+        *total_files.lock().unwrap() += 1;
+        *total_size.lock().unwrap() += size;
         
-        // Only scan immediate children to avoid deep recursion
-        if let Ok(entries) = fs::read_dir(path) {
-            for entry in entries.flatten().take(100) { // Limit to first 100 entries
-                if let Ok(child_info) = build_file_tree(&entry.path(), directory_sizes) {
-                    dir_size += child_info.size;
-                    children.push(child_info);
-                }
-            }
+        // Progress update
+        let mut last_update = last_progress.lock().unwrap();
+        if last_update.elapsed().as_millis() > 50 {
+            let progress = ScanProgress {
+                current_path: path_str.clone(),
+                files_processed: *total_files.lock().unwrap(),
+                total_size_so_far: *total_size.lock().unwrap(),
+                estimated_total: None,
+            };
+            let _ = app_handle.emit("scan-progress", &progress);
+            *last_update = std::time::Instant::now();
         }
-        
-        // Use calculated size from first pass if available
-        let final_size = directory_sizes.get(&path_str).copied().unwrap_or(dir_size);
-        
-        // Sort children by size (largest first)
-        children.sort_by(|a, b| b.size.cmp(&a.size));
-        
-        Ok(FileInfo {
+
+        return Ok(FileInfo {
             name,
             path: path_str,
-            size: final_size,
-            is_dir: true,
-            children,
-        })
-    } else {
-        Ok(FileInfo {
-            name,
-            path: path_str,
-            size: metadata.len(),
+            size,
             is_dir: false,
             children: Vec::new(),
-        })
+        });
     }
+
+    // Directory processing - much faster approach
+    let entries: Vec<PathBuf> = match fs::read_dir(path) {
+        Ok(entries) => entries
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .take(500) // Limit entries per directory
+            .collect(),
+        Err(_) => {
+            *error_count.lock().unwrap() += 1;
+            return Ok(FileInfo {
+                name,
+                path: path_str,
+                size: 0,
+                is_dir: true,
+                children: Vec::new(),
+            });
+        }
+    };
+
+    // Process entries in parallel - this is where the speed comes from!
+    let children: Vec<FileInfo> = entries
+        .par_iter() // Parallel iterator!
+        .filter_map(|child_path| {
+            scan_directory_parallel(child_path, app_handle, total_files, total_size, error_count, last_progress).ok()
+        })
+        .collect();
+
+    // Calculate directory size from children
+    let dir_size: u64 = children.iter().map(|child| child.size).sum();
+
+    // Sort children by size (largest first) and limit to top 50 for performance
+    let mut sorted_children = children;
+    sorted_children.sort_by(|a, b| b.size.cmp(&a.size));
+    sorted_children.truncate(50);
+
+    Ok(FileInfo {
+        name,
+        path: path_str,
+        size: dir_size,
+        is_dir: true,
+        children: sorted_children,
+    })
 }
+
 
 #[tauri::command]
 fn format_bytes(bytes: u64) -> String {
