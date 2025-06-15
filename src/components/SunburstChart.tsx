@@ -37,20 +37,20 @@ const formatBytes = (bytes: number): string => {
 };
 
 const transformDataForSunburst = (fileInfo: FileInfo, level: number = 0): SunburstData[] => {
-  if (!fileInfo.children || fileInfo.children.length === 0) {
+  if (!fileInfo?.children || fileInfo.children.length === 0) {
     return [];
   }
 
   return fileInfo.children
-    .filter(child => child.size > 0)
+    .filter(child => child && child.size > 0)
     .sort((a, b) => b.size - a.size)
-    .slice(0, level === 0 ? 10 : 8) // Limit items per level
+    .slice(0, level === 0 ? 8 : 6) // Reduce items per level for performance
     .map((child, index) => ({
-      name: child.name,
-      value: child.size,
-      path: child.path,
+      name: child.name || 'Unknown',
+      value: child.size || 0,
+      path: child.path || '',
       level,
-      color: colors[(level * 10 + index) % colors.length],
+      color: colors[(level * 8 + index) % colors.length],
     }));
 };
 
@@ -99,11 +99,19 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, val
   );
 };
 
-export const SunburstChart: React.FC<SunburstChartProps> = ({ data, onNodeClick }) => {
-  const level0Data = transformDataForSunburst(data, 0);
-  const level1Data = data.children?.flatMap(child => 
-    transformDataForSunburst(child, 1)
-  ) || [];
+export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({ data, onNodeClick }) => {
+  const level0Data = React.useMemo(() => transformDataForSunburst(data, 0), [data]);
+  const level1Data = React.useMemo(() => 
+    data?.children?.flatMap(child => transformDataForSunburst(child, 1)) || []
+  , [data]);
+
+  if (!data) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="text-slate-500">No data to display</div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full">
@@ -149,4 +157,4 @@ export const SunburstChart: React.FC<SunburstChartProps> = ({ data, onNodeClick 
       </ResponsiveContainer>
     </div>
   );
-};
+});

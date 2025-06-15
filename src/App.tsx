@@ -16,7 +16,8 @@ function App() {
   const [viewMode, setViewMode] = useState<'treemap' | 'sunburst'>('treemap');
   const [searchTerm, setSearchTerm] = useState('');
   const [scanProgress, setScanProgress] = useState<any>(null);
-  const [scanPath, setScanPath] = useState('');  
+  const [scanPath, setScanPath] = useState('');
+  const [switchingView, setSwitchingView] = useState(false);  
 
   useEffect(() => {
     // Listen for scan progress events
@@ -196,7 +197,14 @@ function App() {
                   <Button
                     variant={viewMode === 'treemap' ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => setViewMode('treemap')}
+                    disabled={switchingView}
+                    onClick={() => {
+                      setSwitchingView(true);
+                      setTimeout(() => {
+                        setViewMode('treemap');
+                        setSwitchingView(false);
+                      }, 100);
+                    }}
                   >
                     <Grid3X3 className="h-4 w-4 mr-2" />
                     Treemap
@@ -204,7 +212,14 @@ function App() {
                   <Button
                     variant={viewMode === 'sunburst' ? 'default' : 'outline'}
                     size="sm"
-                    onClick={() => setViewMode('sunburst')}
+                    disabled={switchingView}
+                    onClick={() => {
+                      setSwitchingView(true);
+                      setTimeout(() => {
+                        setViewMode('sunburst');
+                        setSwitchingView(false);
+                      }, 100);
+                    }}
                   >
                     <PieChart className="h-4 w-4 mr-2" />
                     Sunburst
@@ -233,7 +248,12 @@ function App() {
                     </div>
                   </div>
                 ) : scanResults ? (
-                  viewMode === 'treemap' ? (
+                  switchingView ? (
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                      <p className="text-slate-600 dark:text-slate-400 text-sm">Switching view...</p>
+                    </div>
+                  ) : viewMode === 'treemap' ? (
                     <TreemapChart 
                       data={scanResults.root} 
                       onNodeClick={(data) => console.log('Clicked:', data)}

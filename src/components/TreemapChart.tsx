@@ -35,23 +35,24 @@ const formatBytes = (bytes: number): string => {
 };
 
 const transformData = (fileInfo: FileInfo): TreemapData[] => {
-  if (!fileInfo.children || fileInfo.children.length === 0) {
+  if (!fileInfo?.children || fileInfo.children.length === 0) {
     return [{
-      name: fileInfo.name,
-      size: fileInfo.size,
-      path: fileInfo.path,
+      name: fileInfo?.name || 'Unknown',
+      size: fileInfo?.size || 0,
+      path: fileInfo?.path || '',
     }];
   }
 
   return fileInfo.children
-    .filter(child => child.size > 0)
+    .filter(child => child && child.size > 0)
     .sort((a, b) => b.size - a.size)
-    .slice(0, 20) // Limit to top 20 items for better visualization
+    .slice(0, 15) // Reduce to top 15 for better performance
     .map(child => ({
-      name: child.name,
-      size: child.size,
-      path: child.path,
-      children: child.is_dir && child.children.length > 0 ? transformData(child) : undefined,
+      name: child.name || 'Unknown',
+      size: child.size || 0,
+      path: child.path || '',
+      // Don't include nested children to prevent deep recursion
+      children: undefined,
     }));
 };
 
@@ -104,8 +105,16 @@ const CustomizedContent = (props: any) => {
   );
 };
 
-export const TreemapChart: React.FC<TreemapChartProps> = ({ data, onNodeClick }) => {
-  const treemapData = transformData(data);
+export const TreemapChart: React.FC<TreemapChartProps> = React.memo(({ data, onNodeClick }) => {
+  const treemapData = React.useMemo(() => transformData(data), [data]);
+
+  if (!data) {
+    return (
+      <div className="w-full h-full flex items-center justify-center">
+        <div className="text-slate-500">No data to display</div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-full">
@@ -121,4 +130,4 @@ export const TreemapChart: React.FC<TreemapChartProps> = ({ data, onNodeClick })
       </ResponsiveContainer>
     </div>
   );
-};
+});
