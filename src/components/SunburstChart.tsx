@@ -20,6 +20,7 @@ interface SunburstData {
 interface SunburstChartProps {
   data: FileInfo;
   onNodeClick?: (data: any) => void;
+  onContextMenu?: (data: any, event: React.MouseEvent) => void;
 }
 
 const colors = [
@@ -104,7 +105,7 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, val
   );
 };
 
-export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({ data, onNodeClick }) => {
+export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({ data, onNodeClick, onContextMenu }) => {
   const level0Data = React.useMemo(() => transformDataForSunburst(data, 0), [data]);
   const level1Data = React.useMemo(() => 
     data?.children?.flatMap(child => transformDataForSunburst(child, 1)) || []
@@ -119,7 +120,15 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({ data, o
   }
 
   return (
-    <div className="w-full h-full">
+    <div 
+      className="w-full h-full"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        if (onContextMenu && data) {
+          onContextMenu(data, e);
+        }
+      }}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           {/* Outer ring - Level 1 (subdirectories) */}
@@ -133,8 +142,7 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({ data, o
             fill="#8884d8"
             dataKey="value"
             onClick={onNodeClick}
-            animationBegin={0}
-            animationDuration={300}
+            isAnimationActive={false}
           >
             {level1Data.map((entry, index) => (
               <Cell 
@@ -142,8 +150,10 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({ data, o
                 fill={entry.color}
                 stroke="#fff"
                 strokeWidth={2}
-                className="hover:opacity-80 transition-opacity cursor-pointer"
-                style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}
+                style={{ 
+                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+                  cursor: 'pointer'
+                }}
               />
             ))}
           </Pie>
@@ -160,8 +170,7 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({ data, o
             fill="#82ca9d"
             dataKey="value"
             onClick={onNodeClick}
-            animationBegin={100}
-            animationDuration={300}
+            isAnimationActive={false}
           >
             {level0Data.map((entry, index) => (
               <Cell 
@@ -169,8 +178,10 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({ data, o
                 fill={entry.color}
                 stroke="#fff"
                 strokeWidth={3}
-                className="hover:opacity-80 transition-opacity cursor-pointer"
-                style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }}
+                style={{ 
+                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))',
+                  cursor: 'pointer'
+                }}
               />
             ))}
           </Pie>

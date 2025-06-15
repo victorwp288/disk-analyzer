@@ -19,6 +19,7 @@ interface BarChartData {
 interface BarChartProps {
   data: FileInfo;
   onNodeClick?: (data: any) => void;
+  onContextMenu?: (data: any, event: React.MouseEvent) => void;
 }
 
 const colors = [
@@ -95,8 +96,26 @@ const CustomXAxisTick = (props: any) => {
   );
 };
 
-export const BarChart: React.FC<BarChartProps> = React.memo(({ data, onNodeClick }) => {
+export const BarChart: React.FC<BarChartProps> = React.memo(({ data, onNodeClick, onContextMenu }) => {
   const barData = React.useMemo(() => transformData(data), [data]);
+
+  const handleBarClick = (data: any) => {
+    if (onNodeClick && data) {
+      // Find the corresponding file in the original data
+      const fileName = data.name.replace('...', '');
+      const findFile = (fileInfo: FileInfo): FileInfo | null => {
+        for (const child of fileInfo.children || []) {
+          if (child.name.startsWith(fileName) || fileName.startsWith(child.name.substring(0, 10))) {
+            return child;
+          }
+        }
+        return null;
+      };
+      
+      const fileData = findFile(data) || data;
+      onNodeClick(fileData);
+    }
+  };
 
   if (!data) {
     return (
@@ -107,7 +126,15 @@ export const BarChart: React.FC<BarChartProps> = React.memo(({ data, onNodeClick
   }
 
   return (
-    <div className="w-full h-full">
+    <div 
+      className="w-full h-full"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        if (onContextMenu && data) {
+          onContextMenu(data, e);
+        }
+      }}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <RechartsBarChart
           data={barData}
@@ -127,7 +154,7 @@ export const BarChart: React.FC<BarChartProps> = React.memo(({ data, onNodeClick
           <Tooltip content={<CustomTooltip />} />
           <Bar
             dataKey="size"
-            onClick={onNodeClick}
+            onClick={handleBarClick}
             cursor="pointer"
             animationDuration={400}
             radius={[2, 2, 0, 0]}
@@ -136,8 +163,10 @@ export const BarChart: React.FC<BarChartProps> = React.memo(({ data, onNodeClick
               <Cell 
                 key={`cell-${index}`} 
                 fill={colors[index % colors.length]}
-                className="hover:opacity-80 transition-opacity"
-                style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}
+                style={{ 
+                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
+                  cursor: 'pointer'
+                }}
               />
             ))}
           </Bar>

@@ -436,16 +436,19 @@ Type: ${contextMenu.file.is_dir ? 'Directory' : 'File'}
                     <TreemapChart 
                       data={scanResults.root} 
                       onNodeClick={(data) => console.log('Clicked:', data)}
+                      onContextMenu={handleContextMenu}
                     />
                   ) : viewMode === 'sunburst' ? (
                     <SunburstChart 
                       data={scanResults.root} 
                       onNodeClick={(data) => console.log('Clicked:', data)}
+                      onContextMenu={handleContextMenu}
                     />
                   ) : viewMode === 'barchart' ? (
                     <BarChart 
                       data={scanResults.root} 
                       onNodeClick={(data) => console.log('Clicked:', data)}
+                      onContextMenu={handleContextMenu}
                     />
                   ) : (
                     <FileListView 

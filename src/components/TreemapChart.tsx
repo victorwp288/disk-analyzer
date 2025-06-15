@@ -19,6 +19,7 @@ interface TreemapData {
 interface TreemapChartProps {
   data: FileInfo;
   onNodeClick?: (data: any) => void;
+  onContextMenu?: (data: any, event: React.MouseEvent) => void;
 }
 
 const colors = [
@@ -58,7 +59,7 @@ const transformData = (fileInfo: FileInfo): TreemapData[] => {
 };
 
 const CustomizedContent = (props: any) => {
-  const { root, depth, x, y, width, height, index, name, size } = props;
+  const { root, depth, x, y, width, height, index, name, size, payload } = props;
   
   if (width < 40 || height < 30) return null;
   
@@ -165,8 +166,25 @@ const CustomizedContent = (props: any) => {
   );
 };
 
-export const TreemapChart: React.FC<TreemapChartProps> = React.memo(({ data, onNodeClick }) => {
+export const TreemapChart: React.FC<TreemapChartProps> = React.memo(({ data, onNodeClick, onContextMenu }) => {
   const treemapData = React.useMemo(() => transformData(data), [data]);
+
+  const handleTreemapClick = (data: any) => {
+    if (onNodeClick) {
+      // Find the original file data
+      const findFileData = (fileInfo: FileInfo, targetName: string): FileInfo | null => {
+        if (fileInfo.name === targetName) return fileInfo;
+        for (const child of fileInfo.children || []) {
+          const found = findFileData(child, targetName);
+          if (found) return found;
+        }
+        return null;
+      };
+      
+      const fileData = findFileData(data, data.name);
+      onNodeClick(fileData || data);
+    }
+  };
 
   if (!data) {
     return (
@@ -177,7 +195,15 @@ export const TreemapChart: React.FC<TreemapChartProps> = React.memo(({ data, onN
   }
 
   return (
-    <div className="w-full h-full p-2">
+    <div 
+      className="w-full h-full p-2"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        if (onContextMenu && data) {
+          onContextMenu(data, e);
+        }
+      }}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <Treemap
           data={treemapData}
@@ -185,7 +211,7 @@ export const TreemapChart: React.FC<TreemapChartProps> = React.memo(({ data, onN
           aspectRatio={4 / 3}
           stroke="none"
           content={<CustomizedContent />}
-          onClick={onNodeClick}
+          onClick={handleTreemapClick}
           animationDuration={500}
           isAnimationActive={true}
         />
