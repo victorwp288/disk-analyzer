@@ -1,23 +1,33 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { HardDrive, FolderOpen, Search, Settings, Grid3X3, PieChart } from "lucide-react";
+import { HardDrive, FolderOpen, Search, Settings, Grid3X3, PieChart, BarChart3, List, X } from "lucide-react";
 import { Button } from "./components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card";
 import { Input } from "./components/ui/input";
 import { Progress } from "./components/ui/progress";
 import { TreemapChart } from "./components/TreemapChart";
 import { SunburstChart } from "./components/SunburstChart";
+import { BarChart } from "./components/BarChart";
+import { FileListView } from "./components/FileListView";
+import { ContextMenu } from "./components/ContextMenu";
 import { ThemeToggle } from "./components/ThemeToggle";
 
 function App() {
   const [scanning, setScanning] = useState(false);
   const [scanResults, setScanResults] = useState<any>(null);
-  const [viewMode, setViewMode] = useState<'treemap' | 'sunburst'>('treemap');
+  const [viewMode, setViewMode] = useState<'treemap' | 'sunburst' | 'barchart' | 'list'>('treemap');
   const [searchTerm, setSearchTerm] = useState('');
   const [scanProgress, setScanProgress] = useState<any>(null);
   const [scanPath, setScanPath] = useState('');
-  const [switchingView, setSwitchingView] = useState(false);  
+  const [switchingView, setSwitchingView] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    file: any;
+  }>({ visible: false, x: 0, y: 0, file: null });
+  const [showSearchResults, setShowSearchResults] = useState(false);  
 
   useEffect(() => {
     // Listen for scan progress events
@@ -97,11 +107,74 @@ function App() {
     }
   }
 
+  const handleContextMenu = (file: any, event: React.MouseEvent) => {
+    setContextMenu({
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      file,
+    });
+  };
+
+  const handleOpenInExplorer = async () => {
+    if (contextMenu.file) {
+      try {
+        await invoke('open_in_explorer', { path: contextMenu.file.path });
+      } catch (error) {
+        console.error('Failed to open in explorer:', error);
+      }
+    }
+  };
+
+  const handleDeleteFile = async () => {
+    if (contextMenu.file) {
+      if (confirm(`Are you sure you want to delete "${contextMenu.file.name}"?`)) {
+        try {
+          await invoke('delete_file_or_folder', { path: contextMenu.file.path });
+          // Trigger a rescan to update the UI
+          startScan();
+        } catch (error) {
+          console.error('Failed to delete file:', error);
+          alert('Failed to delete file: ' + error);
+        }
+      }
+    }
+  };
+
+  const handleCopyPath = async () => {
+    if (contextMenu.file) {
+      try {
+        await navigator.clipboard.writeText(contextMenu.file.path);
+      } catch (error) {
+        console.error('Failed to copy path:', error);
+      }
+    }
+  };
+
+  const handleShowInfo = () => {
+    if (contextMenu.file) {
+      alert(`
+Name: ${contextMenu.file.name}
+Path: ${contextMenu.file.path}
+Size: ${(contextMenu.file.size / 1024 / 1024).toFixed(2)} MB
+Type: ${contextMenu.file.is_dir ? 'Directory' : 'File'}
+      `.trim());
+    }
+  };
+
+  const setViewModeWithAnimation = (mode: typeof viewMode) => {
+    setSwitchingView(true);
+    setTimeout(() => {
+      setViewMode(mode);
+      setSwitchingView(false);
+    }, 100);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
-      <div className="container mx-auto p-6">
+    <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      <div className="flex-1 flex flex-col p-4 min-h-0">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
           <div className="flex items-center space-x-3">
             <HardDrive className="h-8 w-8 text-blue-600" />
             <div>
@@ -114,10 +187,19 @@ function App() {
             </div>
           </div>
           <div className="flex space-x-2">
-            <Button variant="outline" size="icon">
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={() => setShowSearchResults(!showSearchResults)}
+              disabled={!scanResults}
+            >
               <Search className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon">
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={() => alert('Settings coming soon!')}
+            >
               <Settings className="h-4 w-4" />
             </Button>
             <ThemeToggle />
@@ -125,9 +207,9 @@ function App() {
         </div>
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="flex-1 grid grid-cols-1 xl:grid-cols-4 gap-4 min-h-0">
           {/* Control Panel */}
-          <Card className="lg:col-span-1">
+          <Card className="xl:col-span-1 flex flex-col">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <FolderOpen className="h-5 w-5" />
@@ -184,27 +266,21 @@ function App() {
           </Card>
 
           {/* Visualization Area */}
-          <Card className="lg:col-span-2">
+          <Card className="xl:col-span-3 flex flex-col min-h-0">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>Disk Usage Visualization</CardTitle>
                   <CardDescription>
-                    Interactive {viewMode === 'treemap' ? 'treemap' : 'sunburst'} of your disk usage
+                    Interactive {viewMode === 'treemap' ? 'treemap' : viewMode === 'sunburst' ? 'sunburst' : viewMode === 'barchart' ? 'bar chart' : 'list view'} of your disk usage
                   </CardDescription>
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant={viewMode === 'treemap' ? 'default' : 'outline'}
                     size="sm"
                     disabled={switchingView}
-                    onClick={() => {
-                      setSwitchingView(true);
-                      setTimeout(() => {
-                        setViewMode('treemap');
-                        setSwitchingView(false);
-                      }, 100);
-                    }}
+                    onClick={() => setViewModeWithAnimation('treemap')}
                   >
                     <Grid3X3 className="h-4 w-4 mr-2" />
                     Treemap
@@ -213,22 +289,34 @@ function App() {
                     variant={viewMode === 'sunburst' ? 'default' : 'outline'}
                     size="sm"
                     disabled={switchingView}
-                    onClick={() => {
-                      setSwitchingView(true);
-                      setTimeout(() => {
-                        setViewMode('sunburst');
-                        setSwitchingView(false);
-                      }, 100);
-                    }}
+                    onClick={() => setViewModeWithAnimation('sunburst')}
                   >
                     <PieChart className="h-4 w-4 mr-2" />
                     Sunburst
                   </Button>
+                  <Button
+                    variant={viewMode === 'barchart' ? 'default' : 'outline'}
+                    size="sm"
+                    disabled={switchingView}
+                    onClick={() => setViewModeWithAnimation('barchart')}
+                  >
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    Bar Chart
+                  </Button>
+                  <Button
+                    variant={viewMode === 'list' ? 'default' : 'outline'}
+                    size="sm"
+                    disabled={switchingView}
+                    onClick={() => setViewModeWithAnimation('list')}
+                  >
+                    <List className="h-4 w-4 mr-2" />
+                    List View
+                  </Button>
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="h-96 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
+            <CardContent className="flex-1 min-h-0">
+              <div className="h-full bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
                 {scanning ? (
                   <div className="text-center space-y-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
@@ -258,10 +346,21 @@ function App() {
                       data={scanResults.root} 
                       onNodeClick={(data) => console.log('Clicked:', data)}
                     />
-                  ) : (
+                  ) : viewMode === 'sunburst' ? (
                     <SunburstChart 
                       data={scanResults.root} 
                       onNodeClick={(data) => console.log('Clicked:', data)}
+                    />
+                  ) : viewMode === 'barchart' ? (
+                    <BarChart 
+                      data={scanResults.root} 
+                      onNodeClick={(data) => console.log('Clicked:', data)}
+                    />
+                  ) : (
+                    <FileListView 
+                      data={scanResults.root} 
+                      onNodeClick={(data) => console.log('Clicked:', data)}
+                      onContextMenu={handleContextMenu}
                     />
                   )
                 ) : (
@@ -276,7 +375,52 @@ function App() {
             </CardContent>
           </Card>
         </div>
+        
+        {/* Search Results Panel */}
+        {showSearchResults && (
+          <Card className="mt-4">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center space-x-2">
+                  <Search className="h-5 w-5" />
+                  <span>Search Results</span>
+                </CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowSearchResults(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Input
+                placeholder="Search files and folders..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <div className="mt-4 text-sm text-slate-500 dark:text-slate-400">
+                {searchTerm ? `Searching for "${searchTerm}"...` : 'Enter a search term to find files and folders'}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
+      
+      {/* Context Menu */}
+      <ContextMenu
+        visible={contextMenu.visible}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        onClose={() => setContextMenu({ ...contextMenu, visible: false })}
+        onOpenInExplorer={handleOpenInExplorer}
+        onDelete={handleDeleteFile}
+        onCopyPath={handleCopyPath}
+        onShowInfo={handleShowInfo}
+        fileName={contextMenu.file?.name || ''}
+        isDirectory={contextMenu.file?.is_dir || false}
+      />
     </div>
   );
 }

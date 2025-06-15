@@ -172,11 +172,73 @@ fn format_bytes(bytes: u64) -> String {
     human_bytes::human_bytes(bytes as f64)
 }
 
+#[tauri::command]
+async fn open_in_explorer(path: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg("/select,")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(&path)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    
+    #[cfg(target_os = "linux")]
+    {
+        // Try to use the default file manager
+        let parent = Path::new(&path).parent()
+            .ok_or("Could not get parent directory")?;
+        std::process::Command::new("xdg-open")
+            .arg(parent)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_file_or_folder(path: String) -> Result<(), String> {
+    let path_obj = Path::new(&path);
+    
+    if path_obj.is_file() {
+        fs::remove_file(path_obj).map_err(|e| e.to_string())?;
+    } else if path_obj.is_dir() {
+        fs::remove_dir_all(path_obj).map_err(|e| e.to_string())?;
+    } else {
+        return Err("Path does not exist".to_string());
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+fn copy_to_clipboard(text: String) -> Result<(), String> {
+    // This is a simple implementation - in a real app you might want to use a clipboard crate
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, scan_directory, format_bytes])
+        .invoke_handler(tauri::generate_handler![
+            greet, 
+            scan_directory, 
+            format_bytes, 
+            open_in_explorer, 
+            delete_file_or_folder, 
+            copy_to_clipboard
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
