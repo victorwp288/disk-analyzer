@@ -79,10 +79,11 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, val
   const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
   const y = cy + radius * Math.sin(-midAngle * RADIAN);
-  const percentage = ((value / 1073741824) * 100).toFixed(1); // Using demo total for now
 
   // Only show label if the segment is large enough
-  if (outerRadius - innerRadius < 20) return null;
+  if (outerRadius - innerRadius < 30) return null;
+
+  const displayName = name && name.length > 10 ? `${name.substring(0, 10)}...` : (name || '');
 
   return (
     <text 
@@ -91,10 +92,14 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, val
       fill="white" 
       textAnchor={x > cx ? 'start' : 'end'} 
       dominantBaseline="central"
-      fontSize="12"
-      fontWeight="bold"
+      fontSize="13"
+      fontWeight="600"
+      style={{ 
+        textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      }}
     >
-      {name.length > 8 ? `${name.substring(0, 8)}...` : name}
+      {displayName}
     </text>
   );
 };
@@ -123,14 +128,23 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({ data, o
             cx="50%"
             cy="50%"
             labelLine={false}
-            outerRadius={180}
-            innerRadius={120}
+            outerRadius="85%"
+            innerRadius="55%"
             fill="#8884d8"
             dataKey="value"
             onClick={onNodeClick}
+            animationBegin={0}
+            animationDuration={800}
           >
             {level1Data.map((entry, index) => (
-              <Cell key={`level1-cell-${index}`} fill={entry.color} />
+              <Cell 
+                key={`level1-cell-${index}`} 
+                fill={entry.color}
+                stroke="#fff"
+                strokeWidth={2}
+                className="hover:opacity-80 transition-opacity cursor-pointer"
+                style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}
+              />
             ))}
           </Pie>
 
@@ -141,14 +155,23 @@ export const SunburstChart: React.FC<SunburstChartProps> = React.memo(({ data, o
             cy="50%"
             labelLine={false}
             label={renderCustomizedLabel}
-            outerRadius={120}
-            innerRadius={60}
+            outerRadius="55%"
+            innerRadius="20%"
             fill="#82ca9d"
             dataKey="value"
             onClick={onNodeClick}
+            animationBegin={200}
+            animationDuration={800}
           >
             {level0Data.map((entry, index) => (
-              <Cell key={`level0-cell-${index}`} fill={entry.color} />
+              <Cell 
+                key={`level0-cell-${index}`} 
+                fill={entry.color}
+                stroke="#fff"
+                strokeWidth={3}
+                className="hover:opacity-80 transition-opacity cursor-pointer"
+                style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.15))' }}
+              />
             ))}
           </Pie>
 

@@ -59,13 +59,15 @@ const transformData = (fileInfo: FileInfo): TreemapData[] => {
 const CustomizedContent = (props: any) => {
   const { root, depth, x, y, width, height, index, name, size } = props;
   
-  if (width < 20 || height < 20) return null;
+  if (width < 30 || height < 20) return null;
   
   const color = colors[index % colors.length];
-  const textColor = depth <= 2 ? '#fff' : '#000';
+  const textColor = '#fff';
+  const fontSize = Math.max(10, Math.min(14, width / 12, height / 4));
+  const smallFontSize = Math.max(8, Math.min(11, width / 15, height / 6));
   
   return (
-    <g>
+    <g className="hover:opacity-90 transition-opacity cursor-pointer">
       <rect
         x={x}
         y={y}
@@ -74,28 +76,47 @@ const CustomizedContent = (props: any) => {
         style={{
           fill: color,
           stroke: '#fff',
-          strokeWidth: depth === 0 ? 0 : 1,
-          opacity: depth === 0 ? 1 : 0.8,
+          strokeWidth: 2,
+          filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.1))',
         }}
+        className="hover:brightness-110 transition-all"
       />
-      {width > 50 && height > 30 && (
+      {width > 60 && height > 40 && (
         <>
+          {/* Background for text readability */}
+          <rect
+            x={x + 4}
+            y={y + height / 2 - fontSize}
+            width={width - 8}
+            height={fontSize * 2 + 4}
+            fill="rgba(0,0,0,0.2)"
+            rx="2"
+          />
           <text
             x={x + width / 2}
-            y={y + height / 2 - 8}
+            y={y + height / 2 - 2}
             textAnchor="middle"
             fill={textColor}
-            fontSize={Math.min(12, width / 8, height / 4)}
-            fontWeight="bold"
+            fontSize={fontSize}
+            fontWeight="600"
+            style={{ 
+              textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}
           >
-            {name && name.length > 15 ? `${name.substring(0, 15)}...` : (name || '')}
+            {name && name.length > 20 ? `${name.substring(0, 20)}...` : (name || '')}
           </text>
           <text
             x={x + width / 2}
-            y={y + height / 2 + 8}
+            y={y + height / 2 + smallFontSize + 2}
             textAnchor="middle"
             fill={textColor}
-            fontSize={Math.min(10, width / 10, height / 6)}
+            fontSize={smallFontSize}
+            fontWeight="500"
+            style={{ 
+              textShadow: '1px 1px 2px rgba(0,0,0,0.8)',
+              fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace'
+            }}
           >
             {formatBytes(size)}
           </text>

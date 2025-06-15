@@ -129,9 +129,16 @@ export const BarChart: React.FC<BarChartProps> = React.memo(({ data, onNodeClick
             dataKey="size"
             onClick={onNodeClick}
             cursor="pointer"
+            animationDuration={800}
+            radius={[2, 2, 0, 0]}
           >
             {barData.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />
+              <Cell 
+                key={`cell-${index}`} 
+                fill={colors[index % colors.length]}
+                className="hover:opacity-80 transition-opacity"
+                style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}
+              />
             ))}
           </Bar>
         </RechartsBarChart>

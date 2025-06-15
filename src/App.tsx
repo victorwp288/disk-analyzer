@@ -171,7 +171,13 @@ Type: ${contextMenu.file.is_dir ? 'Directory' : 'File'}
   };
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+    <div 
+      className="h-screen flex flex-col bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800"
+      onContextMenu={(e) => {
+        // Prevent default context menu only in our app area
+        e.preventDefault();
+      }}
+    >
       <div className="flex-1 flex flex-col p-4 min-h-0">
         {/* Header */}
         <div className="flex items-center justify-between mb-4 flex-shrink-0">
@@ -263,6 +269,91 @@ Type: ${contextMenu.file.is_dir ? 'Directory' : 'File'}
                 </>
               )}
             </CardContent>
+            
+            {/* Additional sidebar content */}
+            {scanResults && (
+              <>
+                <CardContent className="border-t pt-4">
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">Quick Stats</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Total Files:</span>
+                      <span className="text-sm font-mono text-slate-900 dark:text-slate-100">
+                        {scanResults.file_count?.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Total Size:</span>
+                      <span className="text-sm font-mono text-slate-900 dark:text-slate-100">
+                        {(scanResults.total_size / 1024 / 1024 / 1024).toFixed(2)} GB
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-slate-600 dark:text-slate-400">Errors:</span>
+                      <span className="text-sm font-mono text-red-600 dark:text-red-400">
+                        {scanResults.error_count || 0}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+                
+                <CardContent className="border-t pt-4">
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">Largest Items</h3>
+                  <div className="space-y-2">
+                    {scanResults.root?.children
+                      ?.sort((a: any, b: any) => b.size - a.size)
+                      ?.slice(0, 5)
+                      ?.map((item: any, index: number) => (
+                        <div key={index} className="flex items-center justify-between p-2 rounded bg-slate-50 dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors cursor-pointer">
+                          <div className="flex items-center space-x-2 min-w-0">
+                            <div className={`w-3 h-3 rounded-full flex-shrink-0 ${item.is_dir ? 'bg-blue-500' : 'bg-green-500'}`} />
+                            <span className="text-xs text-slate-700 dark:text-slate-300 truncate">
+                              {item.name?.length > 20 ? `${item.name.substring(0, 20)}...` : item.name}
+                            </span>
+                          </div>
+                          <span className="text-xs font-mono text-slate-600 dark:text-slate-400 ml-2">
+                            {((item.size || 0) / 1024 / 1024).toFixed(1)}MB
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+                
+                <CardContent className="border-t pt-4">
+                  <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-3">Actions</h3>
+                  <div className="space-y-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start"
+                      onClick={() => alert('Export feature coming soon!')}
+                    >
+                      📊 Export Report
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start"
+                      onClick={() => {
+                        setScanResults(null);
+                        setScanProgress(null);
+                      }}
+                    >
+                      🗑️ Clear Results
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start"
+                      onClick={startScan}
+                      disabled={scanning}
+                    >
+                      🔄 Rescan
+                    </Button>
+                  </div>
+                </CardContent>
+              </>
+            )}
           </Card>
 
           {/* Visualization Area */}
@@ -316,7 +407,7 @@ Type: ${contextMenu.file.is_dir ? 'Directory' : 'File'}
               </div>
             </CardHeader>
             <CardContent className="flex-1 min-h-0">
-              <div className="h-full bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
+              <div className="h-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center overflow-hidden">
                 {scanning ? (
                   <div className="text-center space-y-4">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
